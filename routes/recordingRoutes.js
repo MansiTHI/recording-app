@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { uploadRecording, upload, getAllRecordings, getRecordingAnalysis, uploadRecordingToS3, getPresignedUrl } from "../controllers/recordingController.js";
+import { uploadRecording, upload, getAllRecordings, getRecordingAnalysis, uploadRecordingToS3, getPresignedUrl, getDownloadUrl } from "../controllers/recordingController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = Router();
@@ -15,6 +15,10 @@ router.post("/presigned-url", authMiddleware, getPresignedUrl);
 
 // get all recordings
 router.get("/", authMiddleware, getAllRecordings);
+
+// GET /api/recordings/:id/download - Get signed download URL
+router.get("/:id/download", authMiddleware, getDownloadUrl);
+
 // GET /api/recordings/:id/analysis
 router.get("/:id/analysis", authMiddleware, getRecordingAnalysis);
 

@@ -406,3 +406,55 @@ export const getPresignedUrl = async (req, res) => {
     }
 };
 
+/**
+ * @desc Get a signed download URL for a recording
+ * @route GET /api/recordings/:id/download
+ * @access Private
+ */
+export const getDownloadUrl = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { id } = req.params;
+
+        // Verify recording exists and belongs to user
+        const recording = await Recording.findOne({ _id: id, userId });
+        if (!recording) {
+            return res.status(404).json({
+                success: false,
+                message: "Recording not found or you don't have access to it",
+            });
+        }
+
+        if (!recording.audio?.fileName) {
+            return res.status(400).json({
+                success: false,
+                message: "Recording file not found",
+            });
+        }
+
+        // Generate signed URL for download (valid for 1 hour)
+        const command = new GetObjectCommand({
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: recording.audio.fileName,
+        });
+
+        const downloadUrl = await getSignedUrl(s3, command, {
+            expiresIn: 3600, // 1 hour
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Download URL generated successfully",
+            data: {
+                downloadUrl,
+                fileName: recording.title,
+                fileSize: recording.audio.fileSize,
+            },
+        });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
