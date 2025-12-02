@@ -31,4 +31,28 @@ export const uploadToS3 = async (file, userId) => {
     };
 };
 
+/**
+ * Generate a presigned URL for direct client-to-S3 upload
+ * This bypasses the backend payload limit on Vercel
+ */
+export const generatePresignedUploadUrl = async (userId, fileName, contentType) => {
+    const key = `recordings/${userId}/${Date.now()}-${fileName}`;
+
+    const command = new PutObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: key,
+        ContentType: contentType,
+    });
+
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
+
+    const fileUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+    return {
+        presignedUrl,
+        fileUrl,
+        key,
+    };
+};
+
 export default s3Client;

@@ -6,6 +6,7 @@ import Recording from "../models/recordingModel.js";
 import User from "../models/userModel.js";
 import { sendRecordingNotification } from "../utils/emailService.js";
 import { uploadBufferToS3 } from "../utils/s3Uploader.js";
+import { generatePresignedUploadUrl } from "../utils/s3Service.js";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -35,7 +36,7 @@ const storage = multer.memoryStorage();
 
 export const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: Infinity },
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
 });
 
 
@@ -324,6 +325,79 @@ export const uploadRecordingToS3 = async (req, res) => {
             success: true,
             message: "Uploaded to S3 successfully",
             data: recording,
+        });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * @desc Generate a presigned URL for direct client-to-S3 upload
+ * @route POST /api/recordings/presigned-url
+ * @access Private
+ */
+export const getPresignedUrl = async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { fileName, contentType, appointmentId, metadata } = req.body;
+
+        if (!fileName || !contentType) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "fileName and contentType are required" 
+            });
+        }
+
+        if (!appointmentId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "appointmentId is required" 
+            });
+        }
+
+        const appointment = await Appointment.findById(appointmentId);
+        if (!appointment) {
+            return res.status(400).json({ success: false, message: "Invalid appointmentId" });
+        }
+
+        const { presignedUrl, fileUrl, key } = await generatePresignedUploadUrl(
+            userId,
+            fileName,
+            contentType
+        );
+
+        // Create recording entry with pending status
+        const parsedMetadata = metadata ? JSON.parse(metadata) : {};
+        const recording = await Recording.create({
+            userId,
+            appointmentId,
+            title: fileName,
+            audio: {
+                fileName: key,
+                fileUrl,
+                fileSize: 0, // Will be updated after upload
+                duration: parsedMetadata.duration || 0,
+                format: contentType.split("/")[1] || "unknown",
+            },
+            metadata: {
+                recordedAt: parsedMetadata.recordedAt || new Date(),
+                deviceType: parsedMetadata.deviceType || "unknown",
+                platform: parsedMetadata.platform || "unknown",
+            },
+            analysis: { status: "pending" },
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Presigned URL generated successfully",
+            data: {
+                presignedUrl,
+                fileUrl,
+                recordingId: recording._id,
+                key,
+            },
         });
 
     } catch (err) {
