@@ -32,94 +32,35 @@ const storage = multer.memoryStorage();
 //     },
 // });
 
+
 export const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 500 * 1024 * 1024 },
+    limits: { fileSize: Infinity },
 });
+
 
 // main controller
 export const uploadRecording = async (req, res) => {
     try {
-        const userId = req.userId;
-        const { appointmentId, metadata } = req.body;
 
         if (!req.file) {
-            return res.status(400).json({ success: false, message: "Audio file is required" });
+            return res.status(400).json({ success: false, message: "File required" });
         }
 
-        //Validate appointmentId
-        const appointment = await Appointment.findById(appointmentId);
-        if (!appointment) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid appointmentId. Appointment not found.",
-            });
-        }
+        const uploaded = await uploadToS3(req.file, req.userId);
 
-        let parsedMetadata = {};
-        try {
-            parsedMetadata = metadata ? JSON.parse(metadata) : {};
-        } catch {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid metadata format. Must be valid JSON.",
-            });
-        }
-
-        const uploaded = await uploadBufferToS3(req.file);
-        const newRecording = await Recording.create({
-            userId,
-            appointmentId,
-            title: req.file.originalname,
-            description: parsedMetadata.description || "",
-            audio: {
-                fileName: uploaded.fileName,
-                fileUrl: uploaded.fileUrl,
-                fileSize: uploaded.fileSize,
-                duration: parsedMetadata.duration || 0,
-                format: path.extname(req.file.originalname).replace(".", ""),
-            },
-            metadata: {
-                recordedAt: parsedMetadata.recordedAt || new Date(),
-                deviceType: parsedMetadata.deviceType || "unknown",
-                platform: parsedMetadata.platform || "unknown",
-            },
-            analysis: { status: "pending" },
-        });
-
-        await newRecording.save();
-
-        // Send email notification
-        try {
-            const user = await User.findById(userId);
-            if (user?.email) {
-                await sendRecordingNotification(
-                    newRecording,
-                    user.email,
-                    user.name
-                );
-            }
-        } catch (emailError) {
-            console.error('Failed to send recording notification:', emailError);
-        }
-
-        res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: "Recording uploaded successfully",
-            data: {
-                id: newRecording._id,
-                appointmentId: newRecording.appointmentId,
-                duration: parsedMetadata.duration,
-                date: new Date(parsedMetadata.recordedAt).toISOString().split("T")[0],
-                analyzed: false,
-                fileUrl: uploaded.fileUrl,
-            },
+            message: "Recording uploaded successfully!",
+            data: uploaded
         });
-    } catch (error) {
-        console.error("Upload recording error:", error);
-        res.status(500).json({ success: false, message: error.message });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ success: false, message: err.message });
     }
 };
+
 
 
 const getSignedFileUrl = async (key) => {
@@ -342,6 +283,7 @@ export const getRecordingAnalysis = async (req, res) => {
 
 export const uploadRecordingToS3 = async (req, res) => {
     try {
+
         const userId = req.userId;
         const { appointmentId, metadata } = req.body;
 
@@ -356,7 +298,8 @@ export const uploadRecordingToS3 = async (req, res) => {
 
         const parsedMetadata = metadata ? JSON.parse(metadata) : {};
 
-        const s3File = await uploadBufferToS3(req.file);
+        // ⬅️ FIX IS HERE (pass userId)
+        const s3File = await uploadBufferToS3(req.file, userId);
 
         const recording = await Recording.create({
             userId,
@@ -365,7 +308,7 @@ export const uploadRecordingToS3 = async (req, res) => {
             audio: {
                 fileName: s3File.fileName,
                 fileUrl: s3File.fileUrl,
-                fileSize: s3File.fileSize,
+                fileSize: s3File.fileSize,    // ⬅️ FIX HERE
                 duration: parsedMetadata.duration || 0,
                 format: req.file.mimetype.split("/")[1],
             },
@@ -377,7 +320,7 @@ export const uploadRecordingToS3 = async (req, res) => {
             analysis: { status: "pending" },
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Uploaded to S3 successfully",
             data: recording,
@@ -385,7 +328,7 @@ export const uploadRecordingToS3 = async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, message: err.message });
+        return res.status(500).json({ success: false, message: err.message });
     }
 };
 
