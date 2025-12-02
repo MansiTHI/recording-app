@@ -341,7 +341,7 @@ export const uploadRecordingToS3 = async (req, res) => {
 export const getPresignedUrl = async (req, res) => {
     try {
         const userId = req.userId;
-        const { fileName, contentType, appointmentId, metadata } = req.body;
+        let { fileName, contentType, appointmentId, metadata } = req.body;
 
         if (!fileName || !contentType) {
             return res.status(400).json({ 
@@ -368,8 +368,20 @@ export const getPresignedUrl = async (req, res) => {
             contentType
         );
 
-        // Create recording entry with pending status
-        const parsedMetadata = metadata || {};
+        // Parse metadata if it's a string (from form-data)
+        let parsedMetadata = {};
+        if (metadata) {
+            if (typeof metadata === 'string') {
+                try {
+                    parsedMetadata = JSON.parse(metadata);
+                } catch (e) {
+                    parsedMetadata = {};
+                }
+            } else {
+                parsedMetadata = metadata;
+            }
+        }
+
         const recording = await Recording.create({
             userId,
             appointmentId,
