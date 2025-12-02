@@ -11,7 +11,8 @@ router.post("/upload", authMiddleware, upload.single("file"), uploadRecording);
 router.post("/upload-to-s3", authMiddleware, upload.single("file"), uploadRecordingToS3);
 
 // Generate presigned URL for direct client-to-S3 upload (bypasses Vercel payload limit)
-router.post("/presigned-url", authMiddleware, getPresignedUrl);
+// Use upload.none() to parse form-data fields without file
+router.post("/presigned-url", authMiddleware, upload.none(), getPresignedUrl);
 
 // get all recordings
 router.get("/", authMiddleware, getAllRecordings);
