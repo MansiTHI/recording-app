@@ -369,7 +369,7 @@ export const getPresignedUrl = async (req, res) => {
         );
 
         // Create recording entry with pending status
-        const parsedMetadata = metadata ? JSON.parse(metadata) : {};
+        const parsedMetadata = metadata || {};
         const recording = await Recording.create({
             userId,
             appointmentId,
