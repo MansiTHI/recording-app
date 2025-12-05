@@ -288,9 +288,9 @@ export const uploadRecordingToS3 = async (req, res) => {
         const userId = req.userId;
         const { appointmentId, metadata } = req.body;
 
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: "File is required" });
-        }
+        // if (!req.file) {
+        //     return res.status(400).json({ success: false, message: "File is required" });
+        // }
 
         const appointment = await Appointment.findById(appointmentId);
         if (!appointment) {
